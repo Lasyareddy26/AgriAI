@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="text-center py-16 animate-fade-in">
+    <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight mb-4">
+        Smart Farming <span class="text-blue-500">Intelligence</span>
+    </h1>
+    <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-400">
+        Deploying machine learning models for precision agriculture.
+    </p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-4 mt-8">
+    <a href="/recommendation" class="glass-panel glass-card p-6 rounded-2xl transition duration-300">
+        <h3 class="text-xl font-bold text-white mb-2">Crop Recommendation</h3>
+        <p class="text-gray-400 text-sm">Input soil data to find the best crop.</p>
+    </a>
+    <a href="/yield" class="glass-panel glass-card p-6 rounded-2xl transition duration-300">
+        <h3 class="text-xl font-bold text-white mb-2">Yield Prediction</h3>
+        <p class="text-gray-400 text-sm">Estimate production based on history.</p>
+    </a>
+    <a href="/disease" class="glass-panel glass-card p-6 rounded-2xl transition duration-300">
+        <h3 class="text-xl font-bold text-white mb-2">Disease Classifier</h3>
+        <p class="text-gray-400 text-sm">ResNet9 model to identify plant diseases.</p>
+    </a>
+    <a href="/yolo" class="glass-panel glass-card p-6 rounded-2xl transition duration-300 border-blue-500/30">
+        <h3 class="text-xl font-bold text-white mb-2">YOLO Detection</h3>
+        <p class="text-gray-400 text-sm">Real-time object detection for leaves.</p>
+    </a>
+</div>
+{% endblock %}

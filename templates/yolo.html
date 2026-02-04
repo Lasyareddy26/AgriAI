@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto animate-fade-in">
+    <div class="glass-panel rounded-3xl p-8 text-center">
+        <h2 class="text-3xl font-bold mb-4 text-blue-400">{{ title }}</h2>
+        
+        <form action="{{ request.path }}" method="post" enctype="multipart/form-data" class="space-y-6">
+            <div class="border-2 border-gray-600 border-dashed rounded-2xl h-64 flex flex-col justify-center items-center bg-gray-800/30">
+                <input type="file" name="image" required class="text-gray-400">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">
+                Analyze Image
+            </button>
+        </form>
+
+        {% if result %}
+        <div class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div class="bg-gray-800 p-2 rounded-xl">
+                <p class="text-gray-400 text-sm mb-2">Original</p>
+                <img src="{{ url_for('static', filename=original) }}" class="rounded-lg w-full">
+            </div>
+            
+            {% if type == 'text' %}
+            <div class="glass-panel p-6 rounded-xl border border-blue-500/30 text-left">
+                <p class="text-gray-400 text-sm uppercase mb-1">Diagnosis</p>
+                <p class="text-3xl font-bold text-green-400">{{ result }}</p>
+            </div>
+            {% else %}
+            <div class="bg-gray-800 p-2 rounded-xl">
+                <p class="text-blue-400 text-sm mb-2">Detection Result</p>
+                <img src="{{ url_for('static', filename=result) }}" class="rounded-lg w-full">
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto animate-fade-in">
+    <div class="glass-panel rounded-3xl p-8 md:p-12 shadow-2xl">
+        <h2 class="text-3xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+            Yield Prediction
+        </h2>
+
+        <div class="mb-8 p-6 bg-gradient-to-r from-blue-900/40 to-purple-900/40 border border-blue-500/30 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="text-left">
+                <h3 class="text-lg font-bold text-white mb-1">📍 Auto-Fill</h3>
+                <p class="text-gray-400 text-sm">Use location for Year & Season. (Manually select State/District to match model)</p>
+            </div>
+            <button type="button" onclick="getLocation()" 
+                class="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-full shadow-lg flex items-center gap-2 transition transform hover:scale-105 active:scale-95">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Use My Location
+            </button>
+        </div>
+        <p id="statusMsg" class="text-center text-sm font-medium mb-6 h-6"></p>
+
+        <form action="{{ request.path }}" method="post" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">STATE</label>
+                    <select name="State_Name" id="State_Name" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% for s in states %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">DISTRICT</label>
+                    <select name="District_Name" id="District_Name" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% for d in districts %}
+                        <option value="{{ d }}">{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">CROP YEAR</label>
+                    <input type="number" name="Crop_Year" id="Crop_Year" placeholder="2024" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">SEASON</label>
+                    <select name="Season" id="Season" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% for s in seasons %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">CROP</label>
+                    <select name="Crop" id="Crop" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% for c in crops %}
+                        <option value="{{ c }}">{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">AREA (Hectares)</label>
+                    <input type="number" step="any" name="Area" id="Area" placeholder="100.0" required class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="pt-6">
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 rounded-xl shadow-lg transform transition hover:scale-[1.02]">
+                    Predict Yield
+                </button>
+            </div>
+        </form>
+
+        {% if prediction %}
+        <div class="mt-8 p-6 bg-green-500/20 border border-green-500/50 rounded-xl text-center animate-fade-in">
+            <h3 class="text-3xl font-bold text-white">{{ prediction }}</h3>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function getLocation() {
+    const status = document.getElementById('statusMsg');
+    if (!navigator.geolocation) { status.innerText = "No GPS support"; return; }
+    status.innerText = "Locating...";
+    status.className = "text-center text-yellow-400 text-sm font-medium mb-6";
+    navigator.geolocation.getCurrentPosition(success, error);
+}
+
+async function success(position) {
+    const status = document.getElementById('statusMsg');
+    try {
+        const response = await fetch('/api/get_data_by_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: position.coords.latitude, lon: position.coords.longitude })
+        });
+        const data = await response.json();
+
+        // 1. Fill Simple Fields
+        if(document.getElementById('Crop_Year')) document.getElementById('Crop_Year').value = data.Crop_Year;
+        
+        // 2. SMART SELECT: State & District
+        // We try to find the best match in the dropdown list
+        selectBestMatch('State_Name', data.State_Name);
+        selectBestMatch('District_Name', data.District_Name);
+        selectBestMatch('Season', data.Season);
+
+        status.innerText = "✨ Data Autofilled (Best Matches Selected)";
+        status.className = "text-center text-green-400 text-sm font-bold mb-6";
+    } catch (err) {
+        status.innerText = "Network Error";
+    }
+}
+
+function selectBestMatch(selectId, valueToFind) {
+    const select = document.getElementById(selectId);
+    if (!select || !valueToFind) return;
+
+    valueToFind = valueToFind.toLowerCase().trim();
+    
+    // Loop through all options to find a fuzzy match
+    for (let i = 0; i < select.options.length; i++) {
+        const optText = select.options[i].text.toLowerCase();
+        // Check if option contains the value (e.g. "Belgaum" in "Belgaum District")
+        if (optText.includes(valueToFind) || valueToFind.includes(optText)) {
+            select.selectedIndex = i;
+            select.style.borderColor = '#4ade80';
+            return;
+        }
+    }
+}
+
+function error() { document.getElementById('statusMsg').innerText = "Unable to locate."; }
+</script>
+{% endblock %}
