@@ -22,12 +22,12 @@ UPLOAD_FOLDER = 'static/uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- GROQ API (Replace with your Key) ---
-GROQ_API_KEY = "gsk_YOUR_ACTUAL_API_KEY_HERE"
+# --- GROQ API ---
+GROQ_API_KEY = "<place your key here>"
 client = Groq(api_key=GROQ_API_KEY)
 
 # --------------------------------------------------------------------------
-# 1. DEFINE RESNET ARCHITECTURE (Required for loading .pth)
+# 1. MODEL ARCHITECTURE (ResNet9)
 # --------------------------------------------------------------------------
 def conv_block(in_ch, out_ch, pool=False):
     layers = [nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
@@ -56,26 +56,26 @@ class ResNet9(nn.Module):
 # --------------------------------------------------------------------------
 models = {}
 
-# A. Crop Recommendation
+# A. Crop
 try:
     with open('models/crop_recommendation.pkl', 'rb') as f:
         models['crop'] = pickle.load(f)
-    print("✅ Loaded Crop Model")
-except: print("❌ Error loading Crop Model")
+    print("✅ Crop Model Loaded")
+except: print("❌ Crop Model Failed")
 
-# B. Yield Prediction
+# B. Yield
 try:
     models['yield'] = joblib.load('models/yield_prediction.pkl')
-    print("✅ Loaded Yield Model")
-except: print("❌ Error loading Yield Model")
+    print("✅ Yield Model Loaded")
+except: print("❌ Yield Model Failed")
 
-# C. YOLO Detection
+# C. YOLO
 try:
     models['yolo'] = YOLO('models/yolo_model.pt')
-    print("✅ Loaded YOLO Model")
-except: print("❌ Error loading YOLO Model")
+    print("✅ YOLO Model Loaded")
+except: print("❌ YOLO Model Failed")
 
-# D. Disease Classification (ResNet)
+# D. Disease (ResNet)
 PLANT_CLASSES = [
     'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
     'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy',
@@ -94,14 +94,14 @@ PLANT_CLASSES = [
 
 try:
     resnet = ResNet9(3, len(PLANT_CLASSES))
-    # map_location='cpu' is crucial if trained on GPU
+    # Ensure map_location is set for CPU if you don't have CUDA
     state_dict = torch.load('models/plant_disease_model.pth', map_location=torch.device('cpu'))
     resnet.load_state_dict(state_dict)
     resnet.eval()
     models['disease'] = resnet
-    print("✅ Loaded ResNet Disease Model")
+    print("✅ ResNet Model Loaded")
 except Exception as e: 
-    print(f"❌ Error loading ResNet Model: {e}")
+    print(f"❌ ResNet Model Failed: {e}")
 
 # --------------------------------------------------------------------------
 # 3. HELPER FUNCTIONS
@@ -126,9 +126,8 @@ def get_current_season():
     else: return 'Whole Year'
 
 def predict_resnet_image(img_path):
-    # Transforms must match training (256x256 resizing)
     stats = ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    transform = tt.Compose([tt.Resize((256, 256)), tt.ToTensor(), tt.Normalize(*stats)])
+    transform = tt.Compose([tt.Resize((256, 256)), tt.ToTensor(), tt.Normalize(*stats)]) # Resize to 256 for standard ResNet
     
     img = Image.open(img_path).convert('RGB')
     img_tensor = transform(img).unsqueeze(0)
@@ -185,29 +184,67 @@ def get_auto_data(lat, lon):
     return data, error
 
 # --------------------------------------------------------------------------
-# 4. ROUTES (ALL ROUTES MUST BE HERE)
+# 4. ROUTES
 # --------------------------------------------------------------------------
 
 @app.route('/')
 def home():
     return render_template('index.html')
 
-# --- 1. CHATBOT ---
+# --- UPGRADED CHATBOT ROUTE (Knows how to use the website) ---
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_message = data.get('message')
-    language = data.get('language', 'English')
-    system_prompt = f"You are AgriBot. Answer farming questions in {language}."
+    language = data.get('language', 'English') 
+
+    # --- THE KNOWLEDGE BASE ---
+    system_prompt = f"""
+    You are AgriBot, the expert AI assistant for this specific AgriAI Platform.
+    
+    YOUR JOB:
+    1. Answer farming questions (fertilizers, seasons, pests).
+    2. TEACH USERS HOW TO USE THIS WEBSITE.
+    
+    HOW THIS WEBSITE WORKS (Use this to answer user questions):
+    
+    1. **Crop Recommendation Page**:
+       - Purpose: Tells the farmer which crop is best to grow.
+       - How to use: Go to 'Crop' in the menu. Click 'Use My Location' to auto-fill weather & soil data. Enter Nitrogen (N), Phosphorus (P), and Potassium (K) values from your soil card. Click 'Predict'.
+    
+    2. **Yield Prediction Page**:
+       - Purpose: Estimates how much harvest (in tons/quintals) you will get.
+       - How to use: Go to 'Yield' in the menu. Select State, District, Crop, and Season from the Dropdowns. Enter the Area size. Click 'Predict'.
+    
+    3. **Disease Diagnosis Page**:
+       - Purpose: Identifies the name of a plant disease from a photo.
+       - How to use: Go to 'Disease' in the menu. Upload a clear photo of the infected leaf. The AI (ResNet model) will tell you the disease name and confidence %.
+    
+    4. **YOLO Detection Page**:
+       - Purpose: Draws boxes around the specific infected spots on a leaf.
+       - How to use: Go to 'YOLO' in the menu. Upload a leaf photo. The AI will return the image with boxes drawn around the bugs/fungus.
+    
+    IMPORTANT RULES:
+    - The user has chosen the language: **{language}**.
+    - You MUST translate your entire answer into **{language}**.
+    - Keep answers simple and helpful for a farmer.
+    """
+
     try:
         chat_completion = client.chat.completions.create(
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
-            model="llama-3.3-70b-versatile", temperature=0.7, max_tokens=300
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            model="llama-3.3-70b-versatile", 
+            temperature=0.7, 
+            max_tokens=500
         )
         return {"reply": chat_completion.choices[0].message.content}
-    except Exception as e: return {"reply": "Error connecting to AI."}, 500
+    except Exception as e:
+        print(e)
+        return {"reply": "I am having trouble connecting to the server. Please try again."}, 500
 
-# --- 2. API ---
 @app.route('/api/get_data_by_location', methods=['POST'])
 def api_get_data_by_location():
     req = request.get_json()
@@ -215,7 +252,6 @@ def api_get_data_by_location():
     if error: return {'error': error}, 400
     return data
 
-# --- 3. CROP RECOMMENDATION ---
 @app.route('/recommendation', methods=['GET', 'POST'])
 def recommendation():
     form_fields = [create_field('N', 'Nitrogen'), create_field('P', 'Phosphorus'), create_field('K', 'Potassium'), create_field('temperature', 'Temperature'), create_field('humidity', 'Humidity'), create_field('ph', 'pH'), create_field('rainfall', 'Rainfall')]
@@ -231,7 +267,6 @@ def recommendation():
         except Exception as e: prediction = f"Error: {e}"
     return render_template('form.html', title='Crop Recommendation', form_fields=form_fields, prediction=prediction)
 
-# --- 4. YIELD PREDICTION (Using Dropdowns) ---
 @app.route('/yield', methods=['GET', 'POST'])
 def yield_prediction():
     prediction = None
@@ -239,7 +274,7 @@ def yield_prediction():
     if not bundle: return "Error: Yield Model not loaded."
     
     mappings = bundle['mappings']
-    # Lists for Dropdowns
+    # These lists are sent to yield_form.html for Dropdowns
     lists = {
         'states': sorted(list(mappings['state'].keys())),
         'districts': sorted(list(mappings['district'].keys())),
@@ -249,7 +284,7 @@ def yield_prediction():
 
     if request.method == 'POST':
         try:
-            # Direct dictionary lookup since we use Dropdowns now
+            # We look up the IDs directly from the mapping
             data = {
                 'State_Name': mappings['state'][request.form['State_Name']],
                 'District_Name': mappings['district'][request.form['District_Name']],
@@ -262,9 +297,9 @@ def yield_prediction():
             prediction = f"{pred:.2f} Yield/Unit"
         except Exception as e: prediction = f"Error: {e}"
 
+    # IMPORTANT: Renders 'yield_form.html', not 'form.html'
     return render_template('yield_form.html', title='Yield Prediction', prediction=prediction, **lists)
 
-# --- 5. DISEASE CLASSIFIER (RESNET) ---
 @app.route('/disease', methods=['GET', 'POST'])
 def disease():
     if request.method == 'POST':
@@ -275,17 +310,12 @@ def disease():
             file.save(path)
             
             if models.get('disease'):
-                try:
-                    label, conf = predict_resnet_image(path)
-                    res_text = f"{label.replace('___', ' - ').replace('_', ' ')} ({conf*100:.1f}%)"
-                    return render_template('yolo.html', title='Disease Classification', original=f'uploads/{filename}', result=res_text, type='text')
-                except Exception as e: return f"Error analyzing image: {e}"
-            else:
-                return "ResNet Model not loaded."
-                
+                label, conf = predict_resnet_image(path)
+                res_text = f"{label.replace('___', ' - ').replace('_', ' ')} ({conf*100:.1f}%)"
+                return render_template('yolo.html', title='Disease Classification', original=f'uploads/{filename}', result=res_text, type='text')
+            else: return "Model not loaded"
     return render_template('yolo.html', title='Disease Classification')
 
-# --- 6. YOLO DETECTION ---
 @app.route('/yolo', methods=['GET', 'POST'])
 def yolo():
     if request.method == 'POST':
@@ -296,15 +326,11 @@ def yolo():
             file.save(path)
             
             if models.get('yolo'):
-                try:
-                    results = models['yolo'](path)
-                    res_name = 'pred_' + filename
-                    Image.fromarray(results[0].plot()[..., ::-1]).save(os.path.join(app.config['UPLOAD_FOLDER'], res_name))
-                    return render_template('yolo.html', title='YOLO Detection', original=f'uploads/{filename}', result=f'uploads/{res_name}', type='image')
-                except Exception as e: return f"Error analyzing image: {e}"
-            else:
-                return "YOLO Model not loaded."
-
+                results = models['yolo'](path)
+                res_name = 'pred_' + filename
+                Image.fromarray(results[0].plot()[..., ::-1]).save(os.path.join(app.config['UPLOAD_FOLDER'], res_name))
+                return render_template('yolo.html', title='YOLO Detection', original=f'uploads/{filename}', result=f'uploads/{res_name}', type='image')
+            else: return "Model not loaded"
     return render_template('yolo.html', title='YOLO Detection')
 
 if __name__ == '__main__':
